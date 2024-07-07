@@ -1,6 +1,7 @@
 For the technical Documentation, architectural design and Database sechema design please refer : **Product Management System Documentation.docx** file
 
 SnapShots:
+
 Home page:
 ![image](https://github.com/parasjain1996/product-management-ui/assets/22324297/40639897-91c8-471b-b7c9-57e5587ce9fa)
 
