@@ -50,42 +50,32 @@ public class ProductServiceTest {
 
 	@Test
 	public void testSaveProduct_ExistingProduct() {
-		// Existing product with createdAt and updatedAt set
 		Date createdAt = new Date();
 		Date updatedAt = new Date();
 		Product existingProduct = new Product("1", "Test Product", "Description", 100.0, "Category", 10);
 		existingProduct.setCreatedAt(createdAt);
 		existingProduct.setUpdatedAt(updatedAt);
 
-		// Mock behavior of repository
 		when(productRepository.findById("1")).thenReturn(Optional.of(existingProduct));
 		when(productRepository.save(any(Product.class))).thenReturn(existingProduct);
 
-		// Call the service method
 		Product updatedProduct = productService.updateProduct("1", existingProduct);
 
-		// Verify that findById and save methods were called
 		verify(productRepository, times(1)).findById("1");
 		verify(productRepository, times(1)).save(any(Product.class));
 
-		// Assert that updatedAt is updated but createdAt remains unchanged
 		assertEquals(createdAt, updatedProduct.getCreatedAt());
 	}
 
 	@Test
     public void testUpdateProduct_ProductNotFound() {
-        // Mock behavior of repository for a non-existent product
         when(productRepository.findById("1")).thenReturn(Optional.empty());
 
-        // Call the service method
         Product updatedProduct = productService.updateProduct("1", new Product());
 
-        // Verify that findById was called
         verify(productRepository, times(1)).findById("1");
 
-        // Assert that null is returned for non-existent product
         assertNull(updatedProduct);
     }
 
-	// Add more test cases to cover all branches in updateProduct method
 }
