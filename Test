@@ -1,119 +1,103 @@
-import static org.mockito.Mockito.*;
-import static org.junit.Assert.*;
-import org.junit.Before;
-import org.junit.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.client.HttpClientErrorException;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import org.bson.Document;
 
-public class CreditCardsExtensionClientImplTest {
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
 
-    @Mock
-    private CryptoUtils cryptoUtils;
+public class SchemaGenerator {
 
-    @Mock
-    private RequestContext requestContext;
-
-    @Mock
-    private PropertyConfiguration propertyConfiguration;
-
-    @Mock
-    private CreditCardsExtensionRestClient creditCardsExtensionRestClient;
-
-    @Mock
-    private Span span;
-
-    @Mock
-    private SpanUtils spanUtils;
-
-    @Mock
-    private ResponseEntity<CreditCardsExtension> responseEntity;
-
-    @InjectMocks
-    private CreditCardsExtensionClientImpl creditCardsExtensionClientImpl;
-
-    @Before
-    public void setUp() {
-        MockitoAnnotations.openMocks(this);
+    public static void main(String[] args) {
+        // Generate schema for the User class
+        Document userSchema = generateMongoSchema(User.class);
+        System.out.println("Generated MongoDB Schema: ");
+        System.out.println(userSchema.toJson());
     }
 
-    @Test
-    public void testGetCreditCardExtensionByNumber_Success() throws Exception {
-        // Mock values
-        String cardNumber = "1234567890123456";
-        String encryptedCardNumber = "encryptedCardNumber";
-        String channelId = "channelId";
-        String financialId = "financialId";
-        String hostName = "http://localhost";
-        String uri = "/creditcard/extension";
-        CreditCardsExtension creditCardsExtension = new CreditCardsExtension();
+    /**
+     * Generates MongoDB-like schema from a Java class using reflection
+     *
+     * @param clazz the class to analyze
+     * @return a MongoDB schema as Document
+     */
+    public static Document generateMongoSchema(Class<?> clazz) {
+        Document schemaDoc = new Document();
 
-        // Mock method calls
-        when(spanUtils.startSpan(anyString(), anyString(), anyString(), anyString())).thenReturn(span);
-        when(cryptoUtils.encryptStr(anyString(), anyString(), eq(cardNumber), anyString())).thenReturn(encryptedCardNumber);
-        when(RequestContext.getChannelId()).thenReturn(channelId);
-        when(RequestContext.getFinancialId()).thenReturn(financialId);
-        when(propertyConfiguration.getCreditCardsExtensionHostName()).thenReturn(hostName);
-        when(propertyConfiguration.getCreditCardsExtensionUri()).thenReturn(uri);
-        when(creditCardsExtensionRestClient.exchange(eq(HttpMethod.GET), anyString(), any(HttpHeaders.class), isNull(), eq(CreditCardsExtension.class), eq(encryptedCardNumber), eq(Constants.CREDIT_CARD_NUMBER)))
-                .thenReturn(responseEntity);
-        when(responseEntity.getBody()).thenReturn(creditCardsExtension);
+        Field[] fields = clazz.getDeclaredFields(); // Get all fields from the class
 
-        // Call method
-        CreditCardsExtension result = creditCardsExtensionClientImpl.getCreditCardExtensionByNumber(cardNumber);
+        for (Field field : fields) {
+            field.setAccessible(true);
 
-        // Assert result
-        assertNotNull(result);
-        assertEquals(creditCardsExtension, result);
+            String fieldName = getFieldName(field);
+            Class<?> fieldType = field.getType();
 
-        // Verify method calls
-        verify(spanUtils).startSpan(anyString(), anyString(), anyString(), anyString());
-        verify(cryptoUtils).encryptStr(eq(channelId), eq(financialId), eq(cardNumber), eq(Constants.CREDIT_CARD_NUMBER));
-        verify(propertyConfiguration).getCreditCardsExtensionHostName();
-        verify(propertyConfiguration).getCreditCardsExtensionUri();
-        verify(creditCardsExtensionRestClient).exchange(eq(HttpMethod.GET), anyString(), any(HttpHeaders.class), isNull(), eq(CreditCardsExtension.class), eq(encryptedCardNumber), eq(Constants.CREDIT_CARD_NUMBER));
-        verify(creditCardsExtensionRestClient).validateResponse(responseEntity);
-        verify(span).end(anyLong());
+            // Check if the field is a primitive type or a standard object (like String)
+            if (isPrimitiveOrWrapper(fieldType) || fieldType == String.class) {
+                schemaDoc.append(fieldName, getMongoType(fieldType));
+            } 
+            // Check if the field is a List (array)
+            else if (List.class.isAssignableFrom(fieldType)) {
+                // For lists, we assume it holds a single type, so we need the generic type
+                schemaDoc.append(fieldName, new ArrayList<>());
+            } 
+            // Check if it's an inner/nested object (user-defined class)
+            else if (!fieldType.isPrimitive()) {
+                schemaDoc.append(fieldName, generateMongoSchema(fieldType));
+            }
+        }
+        return schemaDoc;
     }
 
-    @Test
-    public void testGetCreditCardExtensionByNumber_HttpClientErrorException() {
-        // Mock values
-        String cardNumber = "1234567890123456";
-        String encryptedCardNumber = "encryptedCardNumber";
-        String channelId = "channelId";
-        String financialId = "financialId";
-        String hostName = "http://localhost";
-        String uri = "/creditcard/extension";
+    /**
+     * Get the name of the field, checking for @JsonProperty annotation.
+     *
+     * @param field the field to inspect
+     * @return the name of the field
+     */
+    private static String getFieldName(Field field) {
+        if (field.isAnnotationPresent(JsonProperty.class)) {
+            JsonProperty jsonProperty = field.getAnnotation(JsonProperty.class);
+            return jsonProperty.value();
+        }
+        return field.getName();
+    }
 
-        // Mock method calls
-        when(spanUtils.startSpan(anyString(), anyString(), anyString(), anyString())).thenReturn(span);
-        when(cryptoUtils.encryptStr(anyString(), anyString(), eq(cardNumber), anyString())).thenReturn(encryptedCardNumber);
-        when(RequestContext.getChannelId()).thenReturn(channelId);
-        when(RequestContext.getFinancialId()).thenReturn(financialId);
-        when(propertyConfiguration.getCreditCardsExtensionHostName()).thenReturn(hostName);
-        when(propertyConfiguration.getCreditCardsExtensionUri()).thenReturn(uri);
+    /**
+     * Returns MongoDB field types based on Java types.
+     *
+     * @param clazz the Java class
+     * @return MongoDB equivalent type
+     */
+    private static String getMongoType(Class<?> clazz) {
+        if (clazz == String.class) {
+            return "string";
+        } else if (clazz == int.class || clazz == Integer.class) {
+            return "int";
+        } else if (clazz == long.class || clazz == Long.class) {
+            return "long";
+        } else if (clazz == double.class || clazz == Double.class) {
+            return "double";
+        } else if (clazz == boolean.class || clazz == Boolean.class) {
+            return "boolean";
+        } else if (clazz == Date.class) {  // Handling Date type
+            return "date";
+        } else if (clazz == java.time.LocalDate.class || clazz == java.time.LocalDateTime.class) { // Java 8+ date/time
+            return "date";
+        } else {
+            return "object";
+        }
+    }
 
-        HttpClientErrorException httpClientErrorException = mock(HttpClientErrorException.class);
-        when(creditCardsExtensionRestClient.exchange(eq(HttpMethod.GET), anyString(), any(HttpHeaders.class), isNull(), eq(CreditCardsExtension.class), eq(encryptedCardNumber), eq(Constants.CREDIT_CARD_NUMBER)))
-                .thenThrow(httpClientErrorException);
-
-        // Call method and assert exception handling
-        CreditCardsExtension result = creditCardsExtensionClientImpl.getCreditCardExtensionByNumber(cardNumber);
-
-        assertNull(result);
-
-        // Verify method calls
-        verify(spanUtils).startSpan(anyString(), anyString(), anyString(), anyString());
-        verify(cryptoUtils).encryptStr(eq(channelId), eq(financialId), eq(cardNumber), eq(Constants.CREDIT_CARD_NUMBER));
-        verify(propertyConfiguration).getCreditCardsExtensionHostName();
-        verify(propertyConfiguration).getCreditCardsExtensionUri();
-        verify(creditCardsExtensionRestClient).exchange(eq(HttpMethod.GET), anyString(), any(HttpHeaders.class), isNull(), eq(CreditCardsExtension.class), eq(encryptedCardNumber), eq(Constants.CREDIT_CARD_NUMBER));
-        verify(creditCardsExtensionRestClient).handleHttpClientError(httpClientErrorException);
-        verify(span).end(anyLong());
+    /**
+     * Checks if a class is a primitive or its wrapper type.
+     *
+     * @param clazz the class to check
+     * @return true if primitive or wrapper, false otherwise
+     */
+    private static boolean isPrimitiveOrWrapper(Class<?> clazz) {
+        return clazz.isPrimitive() || clazz == Integer.class || clazz == Long.class || clazz == Double.class ||
+               clazz == Boolean.class || clazz == Character.class || clazz == Byte.class || clazz == Short.class ||
+               clazz == Float.class;
     }
 }
