@@ -1,3 +1,8 @@
+
+--add-opens java.base/java.lang=ALL-UNNAMED
+--add-opens java.base/java.math=ALL-UNNAMED
+
+
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.bson.Document;
 
