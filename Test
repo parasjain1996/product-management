@@ -1,0 +1,119 @@
+import static org.mockito.Mockito.*;
+import static org.junit.Assert.*;
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.HttpClientErrorException;
+
+public class CreditCardsExtensionClientImplTest {
+
+    @Mock
+    private CryptoUtils cryptoUtils;
+
+    @Mock
+    private RequestContext requestContext;
+
+    @Mock
+    private PropertyConfiguration propertyConfiguration;
+
+    @Mock
+    private CreditCardsExtensionRestClient creditCardsExtensionRestClient;
+
+    @Mock
+    private Span span;
+
+    @Mock
+    private SpanUtils spanUtils;
+
+    @Mock
+    private ResponseEntity<CreditCardsExtension> responseEntity;
+
+    @InjectMocks
+    private CreditCardsExtensionClientImpl creditCardsExtensionClientImpl;
+
+    @Before
+    public void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    public void testGetCreditCardExtensionByNumber_Success() throws Exception {
+        // Mock values
+        String cardNumber = "1234567890123456";
+        String encryptedCardNumber = "encryptedCardNumber";
+        String channelId = "channelId";
+        String financialId = "financialId";
+        String hostName = "http://localhost";
+        String uri = "/creditcard/extension";
+        CreditCardsExtension creditCardsExtension = new CreditCardsExtension();
+
+        // Mock method calls
+        when(spanUtils.startSpan(anyString(), anyString(), anyString(), anyString())).thenReturn(span);
+        when(cryptoUtils.encryptStr(anyString(), anyString(), eq(cardNumber), anyString())).thenReturn(encryptedCardNumber);
+        when(RequestContext.getChannelId()).thenReturn(channelId);
+        when(RequestContext.getFinancialId()).thenReturn(financialId);
+        when(propertyConfiguration.getCreditCardsExtensionHostName()).thenReturn(hostName);
+        when(propertyConfiguration.getCreditCardsExtensionUri()).thenReturn(uri);
+        when(creditCardsExtensionRestClient.exchange(eq(HttpMethod.GET), anyString(), any(HttpHeaders.class), isNull(), eq(CreditCardsExtension.class), eq(encryptedCardNumber), eq(Constants.CREDIT_CARD_NUMBER)))
+                .thenReturn(responseEntity);
+        when(responseEntity.getBody()).thenReturn(creditCardsExtension);
+
+        // Call method
+        CreditCardsExtension result = creditCardsExtensionClientImpl.getCreditCardExtensionByNumber(cardNumber);
+
+        // Assert result
+        assertNotNull(result);
+        assertEquals(creditCardsExtension, result);
+
+        // Verify method calls
+        verify(spanUtils).startSpan(anyString(), anyString(), anyString(), anyString());
+        verify(cryptoUtils).encryptStr(eq(channelId), eq(financialId), eq(cardNumber), eq(Constants.CREDIT_CARD_NUMBER));
+        verify(propertyConfiguration).getCreditCardsExtensionHostName();
+        verify(propertyConfiguration).getCreditCardsExtensionUri();
+        verify(creditCardsExtensionRestClient).exchange(eq(HttpMethod.GET), anyString(), any(HttpHeaders.class), isNull(), eq(CreditCardsExtension.class), eq(encryptedCardNumber), eq(Constants.CREDIT_CARD_NUMBER));
+        verify(creditCardsExtensionRestClient).validateResponse(responseEntity);
+        verify(span).end(anyLong());
+    }
+
+    @Test
+    public void testGetCreditCardExtensionByNumber_HttpClientErrorException() {
+        // Mock values
+        String cardNumber = "1234567890123456";
+        String encryptedCardNumber = "encryptedCardNumber";
+        String channelId = "channelId";
+        String financialId = "financialId";
+        String hostName = "http://localhost";
+        String uri = "/creditcard/extension";
+
+        // Mock method calls
+        when(spanUtils.startSpan(anyString(), anyString(), anyString(), anyString())).thenReturn(span);
+        when(cryptoUtils.encryptStr(anyString(), anyString(), eq(cardNumber), anyString())).thenReturn(encryptedCardNumber);
+        when(RequestContext.getChannelId()).thenReturn(channelId);
+        when(RequestContext.getFinancialId()).thenReturn(financialId);
+        when(propertyConfiguration.getCreditCardsExtensionHostName()).thenReturn(hostName);
+        when(propertyConfiguration.getCreditCardsExtensionUri()).thenReturn(uri);
+
+        HttpClientErrorException httpClientErrorException = mock(HttpClientErrorException.class);
+        when(creditCardsExtensionRestClient.exchange(eq(HttpMethod.GET), anyString(), any(HttpHeaders.class), isNull(), eq(CreditCardsExtension.class), eq(encryptedCardNumber), eq(Constants.CREDIT_CARD_NUMBER)))
+                .thenThrow(httpClientErrorException);
+
+        // Call method and assert exception handling
+        CreditCardsExtension result = creditCardsExtensionClientImpl.getCreditCardExtensionByNumber(cardNumber);
+
+        assertNull(result);
+
+        // Verify method calls
+        verify(spanUtils).startSpan(anyString(), anyString(), anyString(), anyString());
+        verify(cryptoUtils).encryptStr(eq(channelId), eq(financialId), eq(cardNumber), eq(Constants.CREDIT_CARD_NUMBER));
+        verify(propertyConfiguration).getCreditCardsExtensionHostName();
+        verify(propertyConfiguration).getCreditCardsExtensionUri();
+        verify(creditCardsExtensionRestClient).exchange(eq(HttpMethod.GET), anyString(), any(HttpHeaders.class), isNull(), eq(CreditCardsExtension.class), eq(encryptedCardNumber), eq(Constants.CREDIT_CARD_NUMBER));
+        verify(creditCardsExtensionRestClient).handleHttpClientError(httpClientErrorException);
+        verify(span).end(anyLong());
+    }
+}
